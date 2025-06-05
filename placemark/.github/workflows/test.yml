@@ -1,0 +1,29 @@
+name: Node CI
+
+on: [push]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      NEXT_PUBLIC_MAPBOX_TOKEN: pk.eyJ1IjoidG1jdyIsImEiOiJja2twd25qdWowMXBuMnVxdDZodXJzaDZoIn0.UL4e2OtC7xrGr9hohU1odg
+      WFC_QUOTA: 10
+      WFC_QUOTA_ENTERPRISE: 100
+      TEAM_EMAIL: foo@bar.com
+      DOMAIN: test.local
+      GITHUB_CLIENT_ID: xx
+      GITHUB_CLIENT_SECRET: xx
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - name: Install packages
+        run: |
+          pnpm i
+      - name: Lint
+        run: |
+          pnpm lint
+      - name: Run tests with coverage
+        run: |
+          pnpm test
