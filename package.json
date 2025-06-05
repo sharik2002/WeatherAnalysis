@@ -1,0 +1,7 @@
+{
+  "name": "votre-app",
+  "proxy": "http://localhost:3000",
+  "dependencies": {
+    // vos dépendances
+  }
+}
