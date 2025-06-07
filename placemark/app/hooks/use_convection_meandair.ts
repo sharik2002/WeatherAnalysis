@@ -19,6 +19,8 @@ interface ConvectionState {
   data: ConvectionData | null;
   error: string | null;
   lastUpdate: string | null;
+  availableAnalysisTimes: string[];
+  loadingAnalysisTimes: boolean;
 }
 
 // Variables pour stocker les tokens d'authentification
@@ -44,21 +46,21 @@ async function login(email: string, password: string): Promise<boolean> {
       const authData = await response.json();
       AUTH_TOKEN = authData.Authorization;
       REFRESH_TOKEN = authData.RefreshToken;
-      console.log("Authentication successful for Meandair convection");
+      console.log("Authentification réussie pour les convections Meandair");
       return true;
     } else {
-      console.error(`Authentication error: ${response.status}`);
+      console.error(`Erreur d'authentification: ${response.status}`);
       return false;
     }
   } catch (error) {
-    console.error("Login error:", error);
+    console.error("Erreur de connexion:", error);
     return false;
   }
 }
 
 async function apiRequest(endpoint: string, method: string = "GET"): Promise<any> {
   if (!AUTH_TOKEN) {
-    console.error("Authentication token missing");
+    console.error("Token d'authentification manquant");
     return null;
   }
 
@@ -74,40 +76,50 @@ async function apiRequest(endpoint: string, method: string = "GET"): Promise<any
     if (response.ok) {
       return await response.json();
     } else {
-      console.error(`API error: ${response.status} - ${response.statusText}`);
+      console.error(`Erreur API: ${response.status} - ${response.statusText}`);
       return null;
     }
   } catch (error) {
-    console.error("API request error:", error);
+    console.error("Erreur de requête API:", error);
     return null;
   }
 }
 
-async function getMeandairConvectionData(): Promise<ConvectionData> {
-  console.log("Retrieving Meandair convection data...");
+async function getAvailableAnalysisTimes(): Promise<string[]> {
+  console.log("Récupération des temps d'analyse disponibles...");
   
-  // Récupérer les temps d'analyse disponibles
   const meandairTimes = await apiRequest("/v1/convections/analysis_time?source=meandair");
-  console.log("Meandair times received:", meandairTimes);
+  console.log("Temps Meandair reçus:", meandairTimes);
   
-  let analysisTime = null;
   if (meandairTimes && typeof meandairTimes === 'object' && 'analysis_times' in meandairTimes) {
-    if (meandairTimes.analysis_times.length > 0) {
-      analysisTime = meandairTimes.analysis_times[0];
-    }
+    return meandairTimes.analysis_times || [];
   }
   
-  // Utiliser le temps actuel si aucun temps d'analyse n'est disponible
+  return [];
+}
+
+async function getMeandairConvectionData(selectedAnalysisTime?: string): Promise<ConvectionData> {
+  console.log("Récupération des données de convection Meandair...");
+  
+  let analysisTime = selectedAnalysisTime;
+  
+  // Si aucun temps n'est spécifié, récupérer les temps disponibles
   if (!analysisTime) {
-    analysisTime = new Date().toISOString().slice(0, 13) + ':00:00Z';
-    console.log(`Using current time for Meandair: ${analysisTime}`);
+    const availableTimes = await getAvailableAnalysisTimes();
+    if (availableTimes.length > 0) {
+      analysisTime = availableTimes[0];
+    } else {
+      // Utiliser le temps actuel si aucun temps d'analyse n'est disponible
+      analysisTime = new Date().toISOString().slice(0, 13) + ':00:00Z';
+      console.log(`Utilisation du temps actuel pour Meandair: ${analysisTime}`);
+    }
   }
   
   // Récupérer les données de convection
   const meandairData = await apiRequest(`/v1/convections/?source=meandair&format=geojson&analysis_time=${analysisTime}`);
   
   if (meandairData) {
-    console.log("Meandair convection data retrieved successfully");
+    console.log("Données de convection Meandair récupérées avec succès");
     return {
       success: true,
       data: meandairData,
@@ -115,10 +127,10 @@ async function getMeandairConvectionData(): Promise<ConvectionData> {
       timestamp: new Date().toISOString()
     };
   } else {
-    console.error("Error retrieving Meandair convection data");
+    console.error("Erreur lors de la récupération des données de convection Meandair");
     return {
       success: false,
-      error: "Failed to retrieve Meandair convection data"
+      error: "Échec de la récupération des données de convection Meandair"
     };
   }
 }
@@ -128,14 +140,57 @@ export function useConvectionMeandair() {
     loading: false,
     data: null,
     error: null,
-    lastUpdate: null
+    lastUpdate: null,
+    availableAnalysisTimes: [],
+    loadingAnalysisTimes: false
   });
 
   const [data] = useAtom(dataAtom);
   const rep = usePersistence();
   const transact = rep.useTransact();
 
-  const fetchConvectionData = useCallback(async () => {
+  // Fonction pour récupérer les temps d'analyse disponibles
+  const fetchAvailableAnalysisTimes = useCallback(async () => {
+    setState(prev => ({ ...prev, loadingAnalysisTimes: true, error: null }));
+
+    try {
+      // S'authentifier si nécessaire
+      if (!AUTH_TOKEN) {
+        const email = "sharik.abubucker@Skyconseil.fr";
+        const password = "Sharik@Abu04";
+        
+        const loginSuccess = await login(email, password);
+        if (!loginSuccess) {
+          setState(prev => ({
+            ...prev,
+            loadingAnalysisTimes: false,
+            error: 'Échec de l\'authentification avec l\'API Guidor'
+          }));
+          return;
+        }
+      }
+
+      const analysisTimes = await getAvailableAnalysisTimes();
+      
+      setState(prev => ({
+        ...prev,
+        loadingAnalysisTimes: false,
+        availableAnalysisTimes: analysisTimes,
+        error: null
+      }));
+
+    } catch (error) {
+      console.error('Erreur lors de la récupération des temps d\'analyse:', error);
+      setState(prev => ({
+        ...prev,
+        loadingAnalysisTimes: false,
+        error: error instanceof Error ? error.message : 'Erreur inconnue'
+      }));
+    }
+  }, []);
+
+  // Fonction pour récupérer les données de convection avec un temps d'analyse spécifique
+  const fetchConvectionData = useCallback(async (selectedAnalysisTime?: string) => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
     try {
@@ -149,22 +204,23 @@ export function useConvectionMeandair() {
           setState(prev => ({
             ...prev,
             loading: false,
-            error: 'Failed to authenticate with Guidor API'
+            error: 'Échec de l\'authentification avec l\'API Guidor'
           }));
           return;
         }
       }
 
       // Récupérer les données de convection Meandair
-      const convectionData = await getMeandairConvectionData();
+      const convectionData = await getMeandairConvectionData(selectedAnalysisTime);
       
       if (convectionData.success && convectionData.data) {
-        setState({
+        setState(prev => ({
+          ...prev,
           loading: false,
           data: convectionData,
           error: null,
           lastUpdate: new Date().toISOString()
-        });
+        }));
 
         // Créer ou mettre à jour le dossier de convection Meandair
         await updateConvectionFolder(convectionData);
@@ -172,15 +228,15 @@ export function useConvectionMeandair() {
         setState(prev => ({
           ...prev,
           loading: false,
-          error: convectionData.error || 'Failed to fetch convection data'
+          error: convectionData.error || 'Échec de la récupération des données de convection'
         }));
       }
     } catch (error) {
-      console.error('Error fetching convection data:', error);
+      console.error('Erreur lors de la récupération des données de convection:', error);
       setState(prev => ({
         ...prev,
         loading: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Erreur inconnue'
       }));
     }
   }, []);
@@ -211,7 +267,7 @@ export function useConvectionMeandair() {
           folderId: null
         };
 
-        console.log("Creating new convection folder");
+        console.log("Création d'un nouveau dossier de convection");
       }
 
       // Supprimer les anciennes features de convection dans ce dossier
@@ -251,20 +307,27 @@ export function useConvectionMeandair() {
 
       // Effectuer la transaction pour mettre à jour les données
       await transact({
-        note: "Updated Meandair convection data",
+        note: "Mise à jour des données de convection Meandair",
         putFolders: [convectionFolder],
         putFeatures: newFeatures,
         deleteFeatures: oldFeatures
       });
 
-      console.log(`Updated convection folder with ${newFeatures.length} features`);
+      console.log(`Dossier de convection mis à jour avec ${newFeatures.length} features`);
     } catch (error) {
-      console.error('Error updating convection folder:', error);
+      console.error('Erreur lors de la mise à jour du dossier de convection:', error);
     }
   }, [data, transact]);
 
+  // Charger automatiquement les temps d'analyse disponibles au montage
+  useEffect(() => {
+    fetchAvailableAnalysisTimes();
+  }, [fetchAvailableAnalysisTimes]);
+
   return {
     ...state,
-    refetch: fetchConvectionData
+    fetchConvectionData,
+    fetchAvailableAnalysisTimes,
+    refetch: fetchConvectionData // Maintenir la compatibilité
   };
-} 
+}
