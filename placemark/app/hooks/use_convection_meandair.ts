@@ -263,21 +263,6 @@ export function useConvectionMeandair() {
     }
   }, [data, transact]);
 
-  // Charger les données au montage du composant
-  useEffect(() => {
-    fetchConvectionData();
-  }, [fetchConvectionData]);
-
-  // Auto-refresh toutes les 30 minutes
-  useEffect(() => {
-    const interval = setInterval(() => {
-      console.log("Auto-refreshing convection data...");
-      fetchConvectionData();
-    }, 30 * 60 * 1000); // 30 minutes
-
-    return () => clearInterval(interval);
-  }, [fetchConvectionData]);
-
   return {
     ...state,
     refetch: fetchConvectionData
