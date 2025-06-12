@@ -38,8 +38,8 @@ import { USelection } from "state";
 import { Coordinates, ClientRect } from "@dnd-kit/core/dist/types";
 import { LEFT_PANEL_ROW_HEIGHT } from "app/lib/constants";
 import { FolderMap } from "types";
-import { ConvectionStatus } from "app/components/shared/weather/convection_meandair_status";
-
+import { ConvectionStatusMeandair } from "app/components/shared/weather/convection_meandair_status";
+import { ConvectionStatusMeteoFrance } from "app/components/shared/weather/convection_meteofrance_Status";
 /**
  * Returns the coordinates of the center of a given ClientRect
  */
@@ -473,7 +473,10 @@ export function FeatureEditorFolderInner() {
     >
       <FeatureEditorFolderHeader featureMap={featureMap} />
       <div className="px-2 py-2 border-b border-gray-200 dark:border-gray-900">
-        <ConvectionStatus />
+        <ConvectionStatusMeandair />
+      </div>
+       <div className="px-2 py-2 border-b border-gray-200 dark:border-gray-900">
+        <ConvectionStatusMeteoFrance />
       </div>
       <SortableContext items={tree} strategy={verticalListSortingStrategy}>
         <div

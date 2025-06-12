@@ -882,9 +882,14 @@ export function NoneSymbolization() {
       <Formik<ISymbolizationNone>
         onSubmit={async (values) => {
           try {
+            // Générer une nouvelle couleur aléatoire à chaque soumission
+            const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16);
             await Promise.resolve(
               setMeta({
-                symbolization: values,
+                symbolization: {
+                  ...values,
+                  defaultColor: randomColor
+                },
               })
             ).catch((e) => {
               toast.error("Failed to generate");
@@ -897,7 +902,7 @@ export function NoneSymbolization() {
         initialValues={{
           type: "none",
           simplestyle: meta.symbolization.simplestyle || true,
-          defaultColor: purple900,
+          defaultColor: purple900, // Garder la valeur par défaut ici
           defaultOpacity: meta.symbolization.defaultOpacity,
         }}
       >
@@ -911,6 +916,8 @@ export function NoneSymbolization() {
     </div>
   );
 }
+
+
 
 function ExportOption({ option }: { option: EOption }) {
   return (

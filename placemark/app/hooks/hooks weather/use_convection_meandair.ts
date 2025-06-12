@@ -23,7 +23,6 @@ interface ConvectionState {
   loadingAnalysisTimes: boolean;
 }
 
-// Variables pour stocker les tokens d'authentification
 let AUTH_TOKEN: string | null = null;
 let REFRESH_TOKEN: string | null = null;
 
