@@ -38,7 +38,7 @@ import { USelection } from "state";
 import { Coordinates, ClientRect } from "@dnd-kit/core/dist/types";
 import { LEFT_PANEL_ROW_HEIGHT } from "app/lib/constants";
 import { FolderMap } from "types";
-import { ConvectionStatus } from "app/components/convection_status";
+import { ConvectionStatus } from "app/components/shared/weather/convection_meandair_status";
 
 /**
  * Returns the coordinates of the center of a given ClientRect
