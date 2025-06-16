@@ -10,7 +10,11 @@ export function ConvectionStatusMeandair() {
     error, 
     lastUpdate, 
     fetchConvectionData,
-    fetchAvailableAnalysisTimes
+    fetchAvailableAnalysisTimes,
+    availableValidityTimes,
+    selectedValidityTime,
+    setSelectedValidityTime,
+    loadingValidityTimes
   } = useConvectionMeandair();
 
   const [selectedAnalysisTime, setSelectedAnalysisTime] = useState<string>('');
@@ -42,6 +46,15 @@ export function ConvectionStatusMeandair() {
     }
   };
 
+  // Nouvelle fonction pour récupérer les données sans les afficher
+  const handleFetchDataOnly = () => {
+    if (selectedAnalysisTime) {
+      fetchConvectionData(selectedAnalysisTime, false); // false = ne pas afficher
+    } else {
+      fetchConvectionData(undefined, false);
+    }
+  };
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
       <div className="flex items-center justify-between mb-2">
@@ -55,6 +68,17 @@ export function ConvectionStatusMeandair() {
                 className="text-xs px-2 py-1 rounded bg-purple-100 text-purple-600 hover:bg-purple-200 disabled:bg-gray-100 disabled:text-gray-400"
               >
                 Choisir
+              </button>
+              <button
+                onClick={handleFetchDataOnly}
+                disabled={loading}
+                className={`text-xs px-2 py-1 rounded ${
+                  loading
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-orange-100 text-orange-600 hover:bg-orange-200'
+                }`}
+              >
+                {loading ? 'Récupération...' : 'Récupérer'}
               </button>
               <button
                 onClick={() => fetchConvectionData()}
@@ -79,38 +103,66 @@ export function ConvectionStatusMeandair() {
         </div>
       </div>
 
-      {showTimeSelector && (
-        <div className="mb-3 p-2 bg-gray-50 rounded border">
-          <div className="flex items-center gap-2 mb-2">
-            <select
-              value={selectedAnalysisTime}
-              onChange={(e) => setSelectedAnalysisTime(e.target.value)}
-              disabled={loadingAnalysisTimes}
-              className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 bg-white"
-            >
-              <option value="">
-                {loadingAnalysisTimes 
-                  ? "Chargement..." 
-                  : availableAnalysisTimes.length === 0 
-                    ? "Aucun temps disponible"
-                    : "Sélectionner un temps"
-                }
+      {/* Filtre temps d'analyse - toujours visible */}
+      <div className="mb-3 p-2 bg-gray-50 rounded border">
+        <label className="block text-xs font-medium text-gray-700 mb-1">
+          Temps d'analyse:
+        </label>
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedAnalysisTime}
+            onChange={(e) => setSelectedAnalysisTime(e.target.value)}
+            disabled={loadingAnalysisTimes}
+            className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+          >
+            <option value="">
+              {loadingAnalysisTimes 
+                ? "Chargement..." 
+                : availableAnalysisTimes.length === 0 
+                  ? "Aucun temps disponible - Cliquer sur actualiser"
+                  : "Dernier temps disponible"
+              }
+            </option>
+            {availableAnalysisTimes.map((time) => (
+              <option key={time} value={time}>
+                {formatTime(time)}
               </option>
-              {availableAnalysisTimes.map((time) => (
-                <option key={time} value={time}>
-                  {formatTime(time)}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={fetchAvailableAnalysisTimes}
-              disabled={loadingAnalysisTimes}
-              className="text-xs px-2 py-1 rounded bg-gray-200 text-gray-600 hover:bg-gray-300 disabled:opacity-50"
-              title="Actualiser les temps disponibles"
-            >
-              {loadingAnalysisTimes ? '⟳' : '🔄'}
-            </button>
-          </div>
+            ))}
+          </select>
+          <button
+            onClick={fetchAvailableAnalysisTimes}
+            disabled={loadingAnalysisTimes}
+            className="text-xs px-2 py-1 rounded bg-gray-200 text-gray-600 hover:bg-gray-300 disabled:opacity-50"
+            title="Actualiser les temps disponibles"
+          >
+            {loadingAnalysisTimes ? '⟳' : '🔄'}
+          </button>
+        </div>
+      </div>
+
+      {/* Filtre temps de validité - toujours visible si des temps sont disponibles */}
+      {availableValidityTimes.length > 0 && (
+        <div className="mb-3 p-2 bg-green-50 rounded border">
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            Temps de validité (filtrage):
+          </label>
+          <select
+            value={selectedValidityTime || ''}
+            onChange={(e) => setSelectedValidityTime(e.target.value || null)}
+            className="w-full text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+          >
+            <option value="">Tous les polygones</option>
+            {availableValidityTimes.map((time) => (
+              <option key={time} value={time}>
+                {formatTime(time)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {showTimeSelector && (
+        <div className="mb-3 p-2 bg-blue-50 rounded border">
           <button
             onClick={handleFetchData}
             disabled={loading}
@@ -120,7 +172,7 @@ export function ConvectionStatusMeandair() {
                 : 'bg-green-100 text-green-600 hover:bg-green-200'
             }`}
           >
-            {loading ? 'Récupération...' : selectedAnalysisTime ? 'Récupérer les données' : 'Récupérer (dernier temps)'}
+            {loading ? 'Récupération...' : selectedAnalysisTime ? 'Récupérer et afficher les données' : 'Récupérer et afficher (dernier temps)'}
           </button>
         </div>
       )}
@@ -156,10 +208,20 @@ export function ConvectionStatusMeandair() {
           </div>
         )}
 
+        {selectedValidityTime && (
+          <div className="flex justify-between">
+            <span>Filtre actif:</span>
+            <span className="font-medium text-green-600">{formatTime(selectedValidityTime)}</span>
+          </div>
+        )}
+
         {data?.data?.features && (
           <div className="flex justify-between">
             <span>Cellules:</span>
-            <span className="font-medium text-blue-600">{data.data.features.length}</span>
+            <span className="font-medium text-blue-600">
+              {data.data.features.length}
+              {selectedValidityTime && ` (filtrées)`}
+            </span>
           </div>
         )}
 

@@ -6,6 +6,7 @@ import { newFeatureId } from 'app/lib/id';
 import { IFolder, IWrappedFeature } from 'types';
 import { generateNKeysBetween } from 'fractional-indexing';
 
+// interface of the data 
 interface ConvectionData {
   success: boolean;
   data?: any;
@@ -14,6 +15,8 @@ interface ConvectionData {
   error?: string;
 }
 
+
+// interface of the state of data we receibed
 interface ConvectionState {
   loading: boolean;
   data: ConvectionData | null;
@@ -24,6 +27,7 @@ interface ConvectionState {
 }
 
 
+// authentification who i to delete soon
 let AUTH_TOKEN: string | null = null;
 let REFRESH_TOKEN: string | null = null;
 
@@ -58,7 +62,7 @@ async function login(email: string, password: string): Promise<boolean> {
   }
 }
 
-
+// post the conenxion
 async function apiRequest(endpoint: string, method: string = "GET"): Promise<any> {
   if (!AUTH_TOKEN) {
     console.error("Token d'authentification manquant");
@@ -86,7 +90,7 @@ async function apiRequest(endpoint: string, method: string = "GET"): Promise<any
   }
 }
 
-
+// get the avaible analysis time
 async function getAvailableAnalysisTimes(): Promise<string[]> {
   console.log("Récupération des temps d'analyse disponibles...");
   
@@ -100,7 +104,7 @@ async function getAvailableAnalysisTimes(): Promise<string[]> {
   return [];
 }
 
-
+// get the data 
 async function getMeteoFranceConvectionData(selectedAnalysisTime?: string): Promise<ConvectionData> {
   console.log("Récupération des données de convection MeteoFrance...");
   
@@ -138,6 +142,8 @@ async function getMeteoFranceConvectionData(selectedAnalysisTime?: string): Prom
   }
 }
 
+
+// final usage of all request 
 export function useConvectionMeteoFrance() {
   const [state, setState] = useState<ConvectionState>({
     loading: false,
@@ -192,7 +198,7 @@ export function useConvectionMeteoFrance() {
     }
   }, []);
 
-  // Fonction pour récupérer les données de convection avec un temps d'analyse spécifique
+  // the func for get the data 
   const fetchConvectionData = useCallback(async (selectedAnalysisTime?: string) => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
@@ -331,6 +337,6 @@ export function useConvectionMeteoFrance() {
     ...state,
     fetchConvectionData,
     fetchAvailableAnalysisTimes,
-    refetch: fetchConvectionData // Maintenir la compatibilité
+    refetch: fetchConvectionData // Maintenir la compatibilitéaa
   };
 }
