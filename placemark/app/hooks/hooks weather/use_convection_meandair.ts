@@ -472,7 +472,7 @@ export function useConvectionMeandair() {
     ...state,
     fetchConvectionData,
     fetchAvailableAnalysisTimes,
-    //setSelectedValidityTime,
+    setSelectedValidityTime,
     refetch: fetchConvectionData,
   };
 }
