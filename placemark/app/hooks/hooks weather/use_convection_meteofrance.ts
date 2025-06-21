@@ -15,8 +15,7 @@ interface ConvectionData {
   error?: string;
 }
 
-
-// interface of the state of data we receibed
+// interface of the state of data we received
 interface ConvectionState {
   loading: boolean;
   data: ConvectionData | null;
@@ -24,8 +23,27 @@ interface ConvectionState {
   lastUpdate: string | null;
   availableAnalysisTimes: string[];
   loadingAnalysisTimes: boolean;
+  availableValidityTimes: string[];
+  selectedValidityTime: string | null;
+  loadingValidityTimes: boolean;
 }
 
+// Ajouter cette fonction ici
+function formatDateForDisplay(dateString: string): string {
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleString('fr-FR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (error) {
+    console.error('Erreur de formatage de date:', error);
+    return dateString;
+  }
+}
 
 // authentification who i to delete soon
 let AUTH_TOKEN: string | null = null;
@@ -62,7 +80,7 @@ async function login(email: string, password: string): Promise<boolean> {
   }
 }
 
-// post the conenxion
+// post the connexion
 async function apiRequest(endpoint: string, method: string = "GET"): Promise<any> {
   if (!AUTH_TOKEN) {
     console.error("Token d'authentification manquant");
@@ -90,7 +108,7 @@ async function apiRequest(endpoint: string, method: string = "GET"): Promise<any
   }
 }
 
-// get the avaible analysis time
+// get the available analysis time
 async function getAvailableAnalysisTimes(): Promise<string[]> {
   console.log("Récupération des temps d'analyse disponibles...");
   
@@ -142,6 +160,42 @@ async function getMeteoFranceConvectionData(selectedAnalysisTime?: string): Prom
   }
 }
 
+// extract validity time
+function extractValidityTimes(convectionData: ConvectionData): string[] {
+  if (!convectionData.data?.features) return [];
+
+  const validityTimes = new Set<string>();
+
+  convectionData.data.features.forEach((feature: any) => {
+    if (feature.properties?.validity_start_time) {
+      validityTimes.add(feature.properties.validity_start_time);
+    }
+  });
+
+  return Array.from(validityTimes).sort();
+}
+
+// filter it
+function filterPolygonsByValidityTime(
+  convectionData: ConvectionData,
+  selectedTime: string | null
+): ConvectionData {
+  if (!selectedTime || !convectionData.data?.features) {
+    return convectionData;
+  }
+
+  const filteredFeatures = convectionData.data.features.filter(
+    (feature: any) => feature.properties?.validity_start_time === selectedTime
+  );
+
+  return {
+    ...convectionData,
+    data: {
+      ...convectionData.data,
+      features: filteredFeatures,
+    },
+  };
+}
 
 // final usage of all request 
 export function useConvectionMeteoFrance() {
@@ -151,7 +205,10 @@ export function useConvectionMeteoFrance() {
     error: null,
     lastUpdate: null,
     availableAnalysisTimes: [],
-    loadingAnalysisTimes: false
+    loadingAnalysisTimes: false,
+    availableValidityTimes: [],
+    selectedValidityTime: null,
+    loadingValidityTimes: false,
   });
 
   const [data] = useAtom(dataAtom);
@@ -198,135 +255,167 @@ export function useConvectionMeteoFrance() {
     }
   }, []);
 
-  // the func for get the data 
-  const fetchConvectionData = useCallback(async (selectedAnalysisTime?: string) => {
-    setState(prev => ({ ...prev, loading: true, error: null }));
+  // Fonction pour récupérer les données de convection avec un temps d'analyse spécifique
+  const fetchConvectionData = useCallback(
+    async (selectedAnalysisTime?: string, shouldDisplay: boolean = true) => {
+      setState(prev => ({ ...prev, loading: true, error: null }));
 
-    try {
-      // S'authentifier si nécessaire
-      if (!AUTH_TOKEN) {
-        const email = "sharik.abubucker@Skyconseil.fr";
-        const password = "Sharik@Abu04";
-        
-        const loginSuccess = await login(email, password);
-        if (!loginSuccess) {
+      try {
+        // S'authentifier si nécessaire
+        if (!AUTH_TOKEN) {
+          const email = "sharik.abubucker@Skyconseil.fr";
+          const password = "Sharik@Abu04";
+
+          const loginSuccess = await login(email, password);
+          if (!loginSuccess) {
+            setState(prev => ({
+              ...prev,
+              loading: false,
+              error: "Échec de l'authentification avec l'API Guidor",
+            }));
+            return;
+          }
+        }
+
+        // Récupérer les données de convection MeteoFrance
+        const convectionData = await getMeteoFranceConvectionData(
+          selectedAnalysisTime
+        );
+
+        if (convectionData.success && convectionData.data) {
+          // Extraire les temps de validité disponibles
+          const validityTimes = extractValidityTimes(convectionData);
+          const currentSelectedValidityTime = state.selectedValidityTime || validityTimes[0] || null;
+
           setState(prev => ({
             ...prev,
             loading: false,
-            error: 'Échec de l\'authentification avec l\'API Guidor'
+            data: convectionData,
+            error: null,
+            lastUpdate: new Date().toISOString(),
+            availableValidityTimes: validityTimes,
+            selectedValidityTime: currentSelectedValidityTime
           }));
-          return;
-        }
-      }
 
-      // Récupérer les données de convection MeteoFrance
-      const convectionData = await getMeteoFranceConvectionData(selectedAnalysisTime);
-      
-      if (convectionData.success && convectionData.data) {
+          // Créer le dossier seulement si shouldDisplay est true
+          if (shouldDisplay) {
+            const filteredData = filterPolygonsByValidityTime(
+              convectionData, 
+              currentSelectedValidityTime
+            );
+            
+            // Passer les paramètres sélectionnés pour le nom du dossier
+            await updateConvectionFolder(
+              filteredData, 
+              selectedAnalysisTime || convectionData.analysisTime || 'Unknown', 
+              currentSelectedValidityTime
+            );
+          }
+        } else {
+          setState(prev => ({
+            ...prev,
+            loading: false,
+            error:
+              convectionData.error ||
+              "Échec de la récupération des données de convection",
+          }));
+        }
+      } catch (error) {
+        console.error(
+          "Erreur lors de la récupération des données de convection:",
+          error
+        );
         setState(prev => ({
           ...prev,
           loading: false,
-          data: convectionData,
-          error: null,
-          lastUpdate: new Date().toISOString()
-        }));
-
-        // Créer ou mettre à jour le dossier de convection MeteoFrance
-        await updateConvectionFolder(convectionData);
-      } else {
-        setState(prev => ({
-          ...prev,
-          loading: false,
-          error: convectionData.error || 'Échec de la récupération des données de convection'
+          error: error instanceof Error ? error.message : "Erreur inconnue",
         }));
       }
-    } catch (error) {
-      console.error('Erreur lors de la récupération des données de convection:', error);
-      setState(prev => ({
-        ...prev,
-        loading: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
-      }));
-    }
-  }, []);
+    },
+    [state.selectedValidityTime]
+  );
 
-  const updateConvectionFolder = useCallback(async (convectionData: ConvectionData) => {
-    try {
-      // Rechercher le dossier "Convection MeteoFrance Locale" existant
-      let convectionFolder: IFolder | null = null;
-      for (const folder of data.folderMap.values()) {
-        if (folder.name === "Convection MeteoFrance Locale") {
-          convectionFolder = folder;
-          break;
-        }
-      }
-
-      // Créer le dossier s'il n'existe pas
-      if (!convectionFolder) {
+  const updateConvectionFolder = useCallback(
+    async (
+      convectionData: ConvectionData, 
+      selectedAnalysisTime: string, 
+      selectedValidityTime: string | null
+    ) => {
+      try {
+        // Gérer le cas où selectedAnalysisTime peut être undefined
+        const analysisTimeToUse = selectedAnalysisTime || convectionData.analysisTime || 'Unknown';
+        const formattedAnalysisTime = formatDateForDisplay(analysisTimeToUse);
+        const formattedValidityTime = selectedValidityTime 
+          ? formatDateForDisplay(selectedValidityTime)
+          : 'Non spécifié';
+        
+        // Créer le nom du dossier avec les valeurs sélectionnées par l'utilisateur
+        const folderName = `Convection MeteoFrance - Analyse: ${formattedAnalysisTime} - Début: ${formattedValidityTime}`;
+        
+        // Créer un nouveau dossier à chaque fois
         const folderId = newFeatureId();
         const folderAt = generateNKeysBetween(null, null, 1)[0];
-        
-        convectionFolder = {
+
+        const convectionFolder: IFolder = {
           id: folderId,
-          name: "Convection Meteofrance Locale",
+          name: folderName,
           at: folderAt,
           expanded: true,
           locked: false,
           visibility: true,
-          folderId: null
+          folderId: null,
         };
 
-        console.log("Création d'un nouveau dossier de convection");
-      }
+        console.log(`Création d'un nouveau dossier de convection: ${folderName}`);
 
-      // Supprimer les anciennes features de convection dans ce dossier
-      const oldFeatures: string[] = [];
-      for (const feature of data.featureMap.values()) {
-        if (feature.folderId === convectionFolder.id) {
-          oldFeatures.push(feature.id);
-        }
-      }
+        // Créer les nouvelles features à partir des données GeoJSON filtrées
+        const newFeatures: IWrappedFeature[] = [];
+        if (convectionData.data && convectionData.data.features) {
+          const ats = generateNKeysBetween(
+            null,
+            null,
+            convectionData.data.features.length
+          );
 
-      // Créer les nouvelles features à partir des données GeoJSON
-      const newFeatures: IWrappedFeature[] = [];
-      if (convectionData.data && convectionData.data.features) {
-        const ats = generateNKeysBetween(null, null, convectionData.data.features.length);
-        
-        convectionData.data.features.forEach((feature: any, index: number) => {
-          // Ajouter des propriétés supplémentaires à la feature
-          const enhancedFeature = {
-            ...feature,
-            properties: {
-              ...feature.properties,
-              source: 'meteofrance',
-              analysisTime: convectionData.analysisTime,
-              retrievedAt: convectionData.timestamp,
-              type: 'convection'
+          convectionData.data.features.forEach(
+            (feature: any, index: number) => {
+              // Ajouter des propriétés supplémentaires à la feature
+              const enhancedFeature = {
+                ...feature,
+                properties: {
+                  ...feature.properties,
+                  source: "meteofrance",
+                  analysisTime: analysisTimeToUse, // Utiliser la valeur sûre
+                  selectedValidityTime: selectedValidityTime,
+                  retrievedAt: convectionData.timestamp,
+                  type: "convection",
+                  folderName: folderName,
+                },
+              };
+
+              newFeatures.push({
+                id: newFeatureId(),
+                at: ats[index],
+                folderId: convectionFolder.id,
+                feature: enhancedFeature
+              });
             }
-          };
+          );
+        }
 
-          newFeatures.push({
-            id: newFeatureId(),
-            at: ats[index],
-            folderId: convectionFolder!.id,
-            feature: enhancedFeature
-          });
+        // Effectuer la transaction pour mettre à jour les données
+        await transact({
+          note: "Mise à jour des données de convection MeteoFrance",
+          putFolders: [convectionFolder],
+          putFeatures: newFeatures,
+          deleteFeatures: []
         });
+
+        console.log(`Dossier de convection mis à jour avec ${newFeatures.length} features`);
+      } catch (error) {
+        console.error('Erreur lors de la mise à jour du dossier de convection:', error);
       }
-
-      // Effectuer la transaction pour mettre à jour les données
-      await transact({
-        note: "Mise à jour des données de convection MeteoFrance",
-        putFolders: [convectionFolder],
-        putFeatures: newFeatures,
-        deleteFeatures: oldFeatures
-      });
-
-      console.log(`Dossier de convection mis à jour avec ${newFeatures.length} features`);
-    } catch (error) {
-      console.error('Erreur lors de la mise à jour du dossier de convection:', error);
-    }
-  }, [data, transact]);
+    }, [data, transact]);
 
   // Charger automatiquement les temps d'analyse disponibles au montage
   useEffect(() => {
