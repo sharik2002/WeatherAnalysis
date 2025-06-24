@@ -490,7 +490,7 @@ export function FeatureEditorFolderInner() {
         <div
           ref={parentRef}
           data-keybinding-scope="editor_folder"
-          className="placemark-scrollbar overflow-y-auto flex-1"
+          className="placemark-scrollbar overflow-y-auto flex-1 group"
         >
           <div
             className="relative w-full"
