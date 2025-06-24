@@ -261,15 +261,15 @@ export function FeatureEditorFolderInner() {
   const rowVirtualizer = useVirtual({
     size: tree.length,
     parentRef,
-    estimateSize: useCallback(
-      (index: number) => {
-        return index === activeItemIndex ? 0 : LEFT_PANEL_ROW_HEIGHT;
-      },
-      [activeItemIndex]
-    ),
-    overscan: 10,
-  });
-
+      estimateSize: useCallback(
+    (index: number) => {
+      // Toujours retourner une hauteur cohérente
+      return LEFT_PANEL_ROW_HEIGHT;
+    },
+    []
+  ),
+  overscan: 10,
+});
   const { scrollToIndex } = rowVirtualizer;
   const lastSelection = useRef<Sel | null>(null);
 
@@ -463,8 +463,92 @@ export function FeatureEditorFolderInner() {
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={customCollisionDetectionAlgorithm}
-      onDragStart={handleDragStart}
-      onDragOver={handleD
+  <DndContext
+    sensors={sensors}
+    collisionDetection={customCollisionDetectionAlgorithm}
+    onDragStart={handleDragStart}
+    onDragOver={handleDragOver}
+    onDragMove={handleDragMove}
+    onDragEnd={handleDragEnd}
+  >
+    <div className="flex flex-col h-full">
+      {/* Header fixe */}
+      <FeatureEditorFolderHeader featureMap={featureMap} />
+      
+      {/* Bloc 1: Statuts météo avec scroll */}
+      <div className="flex-shrink-0 max-h-48 overflow-y-auto placemark-scrollbar border-b border-gray-200 dark:border-gray-900">
+        <div className="px-2 py-2 border-b border-gray-200 dark:border-gray-900">
+          <ConvectionStatusMeandair />
+        </div>
+        <div className="px-2 py-2">
+          <ConvectionStatusMeteoFrance />
+        </div>
+      </div>
+
+      {/* Bloc 2: Dossiers avec scroll */}
+      <SortableContext items={tree} strategy={verticalListSortingStrategy}>
+        <div
+          ref={parentRef}
+          data-keybinding-scope="editor_folder"
+          className="placemark-scrollbar overflow-y-auto flex-1"
+        >
+          <div
+            className="relative w-full"
+            style={{
+              willChange: "transform",
+              height: `${rowVirtualizer.totalSize}px`,
+            }}
+          >
+            {rowVirtualizer.virtualItems.map((row) => {
+              const item = tree[row.index];
+              const isDragging = activeId === item.id;
+              if (isDragging && dropIntoFolder) {
+                return (
+                  <div 
+                    key={row.index} 
+                    style={{
+                      ...virtualPosition(row),
+                      height: LEFT_PANEL_ROW_HEIGHT
+                    }}
+                  />
+                );
+              }
+              return (
+                <div key={row.index} style={virtualPosition(row)}>
+                  <SortableItem
+                    key={item.id}
+                    id={item.id}
+                    treeCurrentValueRef={treeCurrentValueRef}
+                    depth={
+                      item.id === activeId && projected
+                        ? projected.depth
+                        : item.depth
+                    }
+                    highlight={dropIntoFolder && overId === item.id}
+                    item={item}
+                    preview={meta.label}
+                    isDragging={isDragging}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </SortableContext>
+    </div>
+
+    <Portal.Root>
+      <DragOverlay dropAnimation={null} className="bg-transparent">
+        {activeId ? (
+          <OverlayItem
+            preview={meta.label}
+            id={activeId}
+            treeCurrentValueRef={treeCurrentValueRef}
+            item={tree.find((item) => item.id === activeId)!}
+          />
+        ) : null}
+      </DragOverlay>
+    </Portal.Root>
+  </DndContext>
+);
+}
