@@ -40,6 +40,7 @@ import { LEFT_PANEL_ROW_HEIGHT } from "app/lib/constants";
 import { FolderMap } from "types";
 import { ConvectionStatusMeandair } from "app/components/shared/weather/convection_meandair_status";
 import { ConvectionStatusMeteoFrance } from "app/components/shared/weather/convection_meteofrance_Status";
+import { IcingStatusMeandair } from "app/components/shared/weather/icing_meandair_status";
 /**
  * Returns the coordinates of the center of a given ClientRect
  */
@@ -483,9 +484,11 @@ export function FeatureEditorFolderInner() {
         <div className="px-2 py-2">
           <ConvectionStatusMeteoFrance />
         </div>
+        <div className="px-2 py-2 border-t border-gray-200 dark:border-gray-900">
+          <IcingStatusMeandair />
       </div>
 
-      {/* Bloc 2: Dossiers avec scroll */}
+      {/* Bloc 2: Dossiers avec scroll */
       <SortableContext items={tree} strategy={verticalListSortingStrategy}>
         <div
           ref={parentRef}
@@ -551,4 +554,5 @@ export function FeatureEditorFolderInner() {
     </Portal.Root>
   </DndContext>
 );
+}
 }
