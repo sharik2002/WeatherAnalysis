@@ -77,10 +77,7 @@ async function login(email: string, password: string): Promise<boolean> {
   }
 }
 
-async function apiRequest(
-  endpoint: string,
-  method: string = "GET"
-): Promise<any> {
+async function apiRequest(endpoint: string, method: string = "GET"): Promise<any> {
   if (!AUTH_TOKEN) {
     console.error("Token d'authentification manquant");
     return null;
@@ -109,28 +106,17 @@ async function apiRequest(
 
 async function getAvailableAnalysisTimes(): Promise<string[]> {
   console.log("Récupération des temps d'analyse disponibles...");
-
-  const meandairTimes = await apiRequest(
-    "/v1/convections/analysis_time?source=meandair"
-  );
+  const meandairTimes = await apiRequest("/v1/convections/analysis_time?source=meandair");
   console.log("Temps Meandair reçus:", meandairTimes);
 
-  if (
-    meandairTimes &&
-    typeof meandairTimes === "object" &&
-    "analysis_times" in meandairTimes
-  ) {
+  if (meandairTimes && typeof meandairTimes === "object" && "analysis_times" in meandairTimes) {
     return meandairTimes.analysis_times || [];
   }
-
   return [];
 }
 
-async function getMeandairConvectionData(
-  selectedAnalysisTime?: string
-): Promise<ConvectionData> {
+async function getMeandairConvectionData(selectedAnalysisTime?: string): Promise<ConvectionData> {
   console.log("Récupération des données de convection Meandair...");
-
   let analysisTime = selectedAnalysisTime;
 
   // Si aucun temps n'est spécifié, récupérer les temps disponibles
@@ -146,9 +132,7 @@ async function getMeandairConvectionData(
   }
 
   // Récupérer les données de convection
-  const meandairData = await apiRequest(
-    `/v1/convections/?source=meandair&format=geojson&analysis_time=${analysisTime}`
-  );
+  const meandairData = await apiRequest(`/v1/convections/?source=meandair&format=geojson&analysis_time=${analysisTime}`);
 
   if (meandairData) {
     console.log("Données de convection Meandair récupérées avec succès");
@@ -159,9 +143,7 @@ async function getMeandairConvectionData(
       timestamp: new Date().toISOString(),
     };
   } else {
-    console.error(
-      "Erreur lors de la récupération des données de convection Meandair"
-    );
+    console.error("Erreur lors de la récupération des données de convection Meandair");
     return {
       success: false,
       error: "Échec de la récupération des données de convection Meandair",
@@ -174,7 +156,6 @@ function extractValidityTimes(convectionData: ConvectionData): string[] {
   if (!convectionData.data?.features) return [];
 
   const validityTimes = new Set<string>();
-
   convectionData.data.features.forEach((feature: any) => {
     if (feature.properties?.validity_start_time) {
       validityTimes.add(feature.properties.validity_start_time);
@@ -207,7 +188,6 @@ function filterPolygonsByValidityTime(
 }
 
 // final usage of all request
-
 export function useConvectionMeandair() {
   const [state, setState] = useState<ConvectionState>({
     loading: false,
@@ -234,7 +214,6 @@ export function useConvectionMeandair() {
       if (!AUTH_TOKEN) {
         const email = "sharik.abubucker@Skyconseil.fr";
         const password = "Sharik@Abu04";
-
         const loginSuccess = await login(email, password);
         if (!loginSuccess) {
           setState((prev) => ({
@@ -247,7 +226,6 @@ export function useConvectionMeandair() {
       }
 
       const analysisTimes = await getAvailableAnalysisTimes();
-
       setState((prev) => ({
         ...prev,
         loadingAnalysisTimes: false,
@@ -255,10 +233,7 @@ export function useConvectionMeandair() {
         error: null,
       }));
     } catch (error) {
-      console.error(
-        "Erreur lors de la récupération des temps d'analyse:",
-        error
-      );
+      console.error("Erreur lors de la récupération des temps d'analyse:", error);
       setState((prev) => ({
         ...prev,
         loadingAnalysisTimes: false,
@@ -267,201 +242,189 @@ export function useConvectionMeandair() {
     }
   }, []);
 
-  // Fonction pour récupérer les données de convection avec un temps d'analyse spécifique
-  const fetchConvectionData = useCallback(
-    async (selectedAnalysisTime?: string, shouldDisplay: boolean = true) => {
-      setState((prev) => ({ ...prev, loading: true, error: null }));
+  // 🔥 MODIFIÉ : Fonction pour récupérer les données SANS créer automatiquement le dossier
+  const fetchConvectionData = useCallback(async (selectedAnalysisTime?: string) => {
+    setState((prev) => ({ ...prev, loading: true, error: null }));
 
-      try {
-        // S'authentifier si nécessaire
-        if (!AUTH_TOKEN) {
-          const email = "sharik.abubucker@Skyconseil.fr";
-          const password = "Sharik@Abu04";
-
-          const loginSuccess = await login(email, password);
-          if (!loginSuccess) {
-            setState((prev) => ({
-              ...prev,
-              loading: false,
-              error: "Échec de l'authentification avec l'API Guidor",
-            }));
-            return;
-          }
-        }
-
-        // Récupérer les données de convection Meandair
-        const convectionData = await getMeandairConvectionData(
-          selectedAnalysisTime
-        );
-
-        if (convectionData.success && convectionData.data) {
-          // Extraire les temps de validité disponibles
-          const validityTimes = extractValidityTimes(convectionData);
-          const currentSelectedValidityTime = state.selectedValidityTime || validityTimes[0] || null;
-
+    try {
+      // S'authentifier si nécessaire
+      if (!AUTH_TOKEN) {
+        const email = "sharik.abubucker@Skyconseil.fr";
+        const password = "Sharik@Abu04";
+        const loginSuccess = await login(email, password);
+        if (!loginSuccess) {
           setState((prev) => ({
             ...prev,
             loading: false,
-            data: convectionData,
-            error: null,
-            lastUpdate: new Date().toISOString(),
-            availableValidityTimes: validityTimes,
-            selectedValidityTime: currentSelectedValidityTime
+            error: "Échec de l'authentification avec l'API Guidor",
           }));
-
-          // Créer le dossier seulement si shouldDisplay est true
-          if (shouldDisplay) {
-            const filteredData = filterPolygonsByValidityTime(
-              convectionData, 
-              currentSelectedValidityTime
-            );
-            
-            // Passer les paramètres sélectionnés pour le nom du dossier
-            await updateConvectionFolder(
-              filteredData, 
-              selectedAnalysisTime || convectionData.analysisTime || 'Unknown', 
-              currentSelectedValidityTime
-            );
-          }
-        } else {
-          setState((prev) => ({
-            ...prev,
-            loading: false,
-            error:
-              convectionData.error ||
-              "Échec de la récupération des données de convection",
-          }));
+          return;
         }
-      } catch (error) {
-        console.error(
-          "Erreur lors de la récupération des données de convection:",
-          error
-        );
+      }
+
+      // Récupérer les données de convection Meandair
+      const convectionData = await getMeandairConvectionData(selectedAnalysisTime);
+
+      if (convectionData.success && convectionData.data) {
+        // Extraire les temps de validité disponibles
+        const validityTimes = extractValidityTimes(convectionData);
+        const currentSelectedValidityTime = state.selectedValidityTime || validityTimes[0] || null;
+
         setState((prev) => ({
           ...prev,
           loading: false,
-          error: error instanceof Error ? error.message : "Erreur inconnue",
+          data: convectionData,
+          error: null,
+          lastUpdate: new Date().toISOString(),
+          availableValidityTimes: validityTimes,
+          selectedValidityTime: currentSelectedValidityTime
+        }));
+
+        // 🔥 SUPPRIMÉ : Plus de création automatique de dossier ici
+
+      } else {
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          error: convectionData.error || "Échec de la récupération des données de convection",
         }));
       }
-    },
-    [state.selectedValidityTime]
-  );
-
-  
-  const updateConvectionFolder = useCallback(
-    async (
-      convectionData: ConvectionData, 
-      selectedAnalysisTime: string, 
-      selectedValidityTime: string | null
-    ) => {
-      try {
-        // Gérer le cas où selectedAnalysisTime peut être undefined
-        const analysisTimeToUse = selectedAnalysisTime || convectionData.analysisTime || 'Unknown';
-        const formattedAnalysisTime = formatDateForDisplay(analysisTimeToUse);
-        const formattedValidityTime = selectedValidityTime 
-          ? formatDateForDisplay(selectedValidityTime)
-          : 'Non spécifié';
-        
-        // Créer le nom du dossier avec les valeurs sélectionnées par l'utilisateur
-        const folderName = `Convection Meandair - Analyse: ${formattedAnalysisTime} - Début: ${formattedValidityTime}`;
-        
-        // Créer un nouveau dossier à chaque fois
-        const folderId = newFeatureId();
-        const folderAt = generateNKeysBetween(null, null, 1)[0];
-
-        const convectionFolder: IFolder = {
-          id: folderId,
-          name: folderName,
-          at: folderAt,
-          expanded: true,
-          locked: false,
-          visibility: true,
-          folderId: null,
-        };
-
-        console.log(`Création d'un nouveau dossier de convection: ${folderName}`);
-
-        // Créer les nouvelles features à partir des données GeoJSON filtrées
-        const newFeatures: IWrappedFeature[] = [];
-        if (convectionData.data && convectionData.data.features) {
-          const ats = generateNKeysBetween(
-            null,
-            null,
-            convectionData.data.features.length
-          );
-
-          convectionData.data.features.forEach(
-            (feature: any, index: number) => {
-              // Ajouter des propriétés supplémentaires à la feature
-              const enhancedFeature = {
-                ...feature,
-                properties: {
-                  ...feature.properties,
-                  source: "meandair",
-                  analysisTime: analysisTimeToUse, // Utiliser la valeur sûre
-                  selectedValidityTime: selectedValidityTime,
-                  retrievedAt: convectionData.timestamp,
-                  type: "convection",
-                  folderName: folderName,
-                },
-              };
-
-              newFeatures.push({
-                id: newFeatureId(),
-                at: ats[index],
-                folderId: convectionFolder.id,
-                feature: enhancedFeature,
-              });
-            }
-          );
-        }
-
-        // Effectuer la transaction pour créer le nouveau dossier et ses features
-        await transact({
-          note: `Création des données de convection Meandair - ${folderName}`,
-          putFolders: [convectionFolder],
-          putFeatures: newFeatures,
-          deleteFeatures: [],
-        });
-
-        console.log(
-          `Nouveau dossier de convection créé avec ${newFeatures.length} features: ${folderName}`
-        );
-      } catch (error) {
-        console.error(
-          "Erreur lors de la création du dossier de convection:",
-          error
-        );
-      }
-    },
-    [transact]
-  );
-  
-
-  const setSelectedValidityTime = useCallback(
-    async (validityTime: string | null) => {
+    } catch (error) {
+      console.error("Erreur lors de la récupération des données de convection:", error);
       setState((prev) => ({
         ...prev,
-        selectedValidityTime: validityTime,
+        loading: false,
+        error: error instanceof Error ? error.message : "Erreur inconnue",
       }));
+    }
+  }, [state.selectedValidityTime]);
 
-      // Recharger les données avec le nouveau filtre seulement si on a des données
-      if (state.data) {
-        const filteredData = filterPolygonsByValidityTime(
-          state.data,
-          validityTime
-        );
-        // Utiliser l'analysis time des données actuelles et le validity time sélectionné
-        await updateConvectionFolder(
-          filteredData, 
-          state.data.analysisTime || 'Unknown', 
-          validityTime
-        );
+  // 🆕 NOUVELLE FONCTION : Créer le dossier uniquement sur demande
+  const createConvectionFolder = useCallback(async () => {
+    if (!state.data) {
+      console.error("Aucune donnée disponible pour créer le dossier");
+      setState(prev => ({
+        ...prev,
+        error: "Aucune donnée disponible. Veuillez d'abord récupérer les données."
+      }));
+      return;
+    }
+
+    setState(prev => ({ ...prev, loading: true, error: null }));
+
+    try {
+      // Filtrer les données avec le temps de validité sélectionné
+      const filteredData = filterPolygonsByValidityTime(
+        state.data,
+        state.selectedValidityTime
+      );
+
+      // Créer le dossier avec les données filtrées
+      await updateConvectionFolder(
+        filteredData,
+        state.data.analysisTime || 'Unknown',
+        state.selectedValidityTime
+      );
+
+      setState(prev => ({ ...prev, loading: false }));
+      console.log("✅ Dossier Meandair créé avec succès !");
+
+    } catch (error) {
+      console.error("Erreur lors de la création du dossier:", error);
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        error: error instanceof Error ? error.message : "Erreur lors de la création du dossier",
+      }));
+    }
+  }, [state.data, state.selectedValidityTime]);
+
+  const updateConvectionFolder = useCallback(async (
+    convectionData: ConvectionData,
+    selectedAnalysisTime: string,
+    selectedValidityTime: string | null
+  ) => {
+    try {
+      // Gérer le cas où selectedAnalysisTime peut être undefined
+      const analysisTimeToUse = selectedAnalysisTime || convectionData.analysisTime || 'Unknown';
+      const formattedAnalysisTime = formatDateForDisplay(analysisTimeToUse);
+      const formattedValidityTime = selectedValidityTime
+        ? formatDateForDisplay(selectedValidityTime)
+        : 'Non spécifié';
+
+      // Créer le nom du dossier avec les valeurs sélectionnées par l'utilisateur
+      const folderName = `Conv Meandair analysT: ${formattedAnalysisTime}\nstart: ${formattedValidityTime}`;
+
+      // Créer un nouveau dossier à chaque fois
+      const folderId = newFeatureId();
+      const folderAt = generateNKeysBetween(null, null, 1)[0];
+
+      const convectionFolder: IFolder = {
+        id: folderId,
+        name: folderName,
+        at: folderAt,
+        expanded: true,
+        locked: false,
+        visibility: true,
+        folderId: null,
+      };
+
+      console.log(`Création d'un nouveau dossier de convection: ${folderName}`);
+
+      // Créer les nouvelles features à partir des données GeoJSON filtrées
+      const newFeatures: IWrappedFeature[] = [];
+      if (convectionData.data && convectionData.data.features) {
+        const ats = generateNKeysBetween(null, null, convectionData.data.features.length);
+
+        convectionData.data.features.forEach((feature: any, index: number) => {
+          // Ajouter des propriétés supplémentaires à la feature
+          const enhancedFeature = {
+            ...feature,
+            properties: {
+              ...feature.properties,
+              source: "meandair",
+              analysisTime: analysisTimeToUse,
+              selectedValidityTime: selectedValidityTime,
+              retrievedAt: convectionData.timestamp,
+              type: "convection",
+              folderName: folderName,
+            },
+          };
+
+          newFeatures.push({
+            id: newFeatureId(),
+            at: ats[index],
+            folderId: convectionFolder.id,
+            feature: enhancedFeature,
+          });
+        });
       }
-    },
-    [state.data, updateConvectionFolder]
-  );
-  
+
+      // Effectuer la transaction pour créer le nouveau dossier et ses features
+      await transact({
+        note: `Création des données de convection Meandair - ${folderName}`,
+        putFolders: [convectionFolder],
+        putFeatures: newFeatures,
+        deleteFeatures: [],
+      });
+
+      console.log(`Nouveau dossier de convection créé avec ${newFeatures.length} features: ${folderName}`);
+      } catch (error) {
+      console.error("Erreur lors de la création du dossier de convection:", error);
+      throw error; // Re-lancer l'erreur pour qu'elle soit gérée par createConvectionFolder
+    }
+  }, [transact]);
+
+  // 🔥 MODIFIÉ : Fonction pour changer le validity time SANS créer automatiquement le dossier
+  const setSelectedValidityTime = useCallback((validityTime: string | null) => {
+    setState((prev) => ({
+      ...prev,
+      selectedValidityTime: validityTime,
+    }));
+    
+    // 🔥 SUPPRIMÉ : Plus de création automatique de dossier ici
+    console.log(`Temps de validité sélectionné: ${validityTime}`);
+  }, []);
 
   // Charger automatiquement les temps d'analyse disponibles au montage
   useEffect(() => {
@@ -473,6 +436,7 @@ export function useConvectionMeandair() {
     fetchConvectionData,
     fetchAvailableAnalysisTimes,
     setSelectedValidityTime,
+    createConvectionFolder, // 🆕 AJOUTÉ : Nouvelle fonction pour créer le dossier
     refetch: fetchConvectionData,
   };
 }

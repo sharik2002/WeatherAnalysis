@@ -2,18 +2,19 @@ import React, { useState } from 'react';
 import { useConvectionMeandair } from 'app/hooks/hooks weather/use_convection_meandair';
 
 export function ConvectionStatusMeandair() {
-  const { 
-    loading, 
+  const {
+    loading,
     loadingAnalysisTimes,
     availableAnalysisTimes,
-    data, 
-    error, 
-    lastUpdate, 
+    data,
+    error,
+    lastUpdate,
     fetchConvectionData,
     fetchAvailableAnalysisTimes,
     availableValidityTimes,
     selectedValidityTime,
     setSelectedValidityTime,
+    createConvectionFolder, // 🆕 AJOUTÉ : Nouvelle fonction
     loadingValidityTimes
   } = useConvectionMeandair();
 
@@ -29,22 +30,18 @@ export function ConvectionStatusMeandair() {
     });
   };
 
-  // Récupérer les temps de validité
+  // 🔥 MODIFIÉ : Récupérer les temps de validité SANS créer de dossier
   const handleFetchValidityTimes = () => {
     if (selectedAnalysisTime) {
-      fetchConvectionData(selectedAnalysisTime, false); // false = ne pas créer le dossier
+      fetchConvectionData(selectedAnalysisTime); // Plus de paramètre shouldDisplay
     } else {
-      fetchConvectionData(undefined, false);
+      fetchConvectionData(undefined);
     }
   };
 
-  // Créer le dossier avec les données filtrées
+  // 🆕 NOUVEAU : Créer le dossier avec la nouvelle fonction dédiée
   const handleCreateFolder = () => {
-    if (selectedAnalysisTime) {
-      fetchConvectionData(selectedAnalysisTime, true); // true = créer le dossier
-    } else {
-      fetchConvectionData(undefined, true);
-    }
+    createConvectionFolder(); // Utilise la nouvelle fonction
   };
 
   return (
@@ -67,12 +64,11 @@ export function ConvectionStatusMeandair() {
             className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 bg-white"
           >
             <option value="">
-              {loadingAnalysisTimes 
-                ? "Chargement..." 
-                : availableAnalysisTimes.length === 0 
-                  ? "Aucun temps disponible - Cliquer sur actualiser"
-                  : "Dernier temps disponible"
-              }
+              {loadingAnalysisTimes
+                ? "Chargement..."
+                : availableAnalysisTimes.length === 0
+                ? "Aucun temps disponible - Cliquer sur actualiser"
+                : "Dernier temps disponible"}
             </option>
             {availableAnalysisTimes.map((time) => (
               <option key={time} value={time}>
@@ -116,16 +112,15 @@ export function ConvectionStatusMeandair() {
           onChange={(e) => setSelectedValidityTime(e.target.value || null)}
           disabled={availableValidityTimes.length === 0}
           className={`w-full text-xs border border-gray-300 rounded px-2 py-1 bg-white ${
-            availableValidityTimes.length === 0 
-              ? 'text-gray-400 cursor-not-allowed' 
+            availableValidityTimes.length === 0
+              ? 'text-gray-400 cursor-not-allowed'
               : 'text-black'
           }`}
         >
           <option value="">
-            {availableValidityTimes.length === 0 
+            {availableValidityTimes.length === 0
               ? "Aucun temps disponible - Récupérer d'abord les temps"
-              : "Tous les polygones"
-            }
+              : "Tous les polygones"}
           </option>
           {availableValidityTimes.map((time) => (
             <option key={time} value={time}>
@@ -135,13 +130,13 @@ export function ConvectionStatusMeandair() {
         </select>
       </div>
 
-      {/* Bouton créer le dossier */}
+      {/* 🔥 MODIFIÉ : Bouton créer le dossier avec nouvelle logique */}
       <div className="mb-3">
         <button
           onClick={handleCreateFolder}
-          disabled={loading || availableValidityTimes.length === 0}
+          disabled={loading || !data || availableValidityTimes.length === 0}
           className={`w-full text-xs px-2 py-1 rounded ${
-            loading || availableValidityTimes.length === 0
+            loading || !data || availableValidityTimes.length === 0
               ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
               : 'bg-green-100 text-green-600 hover:bg-green-200'
           }`}
