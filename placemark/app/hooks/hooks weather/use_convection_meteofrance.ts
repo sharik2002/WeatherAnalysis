@@ -34,16 +34,18 @@ function formatDateForDisplay(dateString: string): string {
     const date = new Date(dateString);
     return date.toLocaleString('fr-FR', {
       year: 'numeric',
-      month: '2-digit',
+      month: '2-digit', 
       day: '2-digit',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: 'UTC' // 🎯 AJOUTÉ : Force UTC
     });
   } catch (error) {
     console.error('Erreur de formatage de date:', error);
     return dateString;
   }
 }
+
 
 // authentification who i to delete soon
 let AUTH_TOKEN: string | null = null;
@@ -141,7 +143,6 @@ async function getMeteoFranceConvectionData(selectedAnalysisTime?: string): Prom
   const meteofranceData = await apiRequest(`/v1/convections/?source=meteofrance&format=geojson&analysis_time=${analysisTime}`);
 
   if (meteofranceData) {
-    console.log("Données de convection Meteo France récupérées avec succès");
     return {
       success: true,
       data: meteofranceData,
@@ -157,32 +158,76 @@ async function getMeteoFranceConvectionData(selectedAnalysisTime?: string): Prom
   }
 }
 
-// extract validity time
 function extractValidityTimes(convectionData: ConvectionData): string[] {
   if (!convectionData.data?.features) return [];
-
+  
   const validityTimes = new Set<string>();
   convectionData.data.features.forEach((feature: any) => {
     if (feature.properties?.validity_start_time) {
       validityTimes.add(feature.properties.validity_start_time);
     }
   });
-
-  return Array.from(validityTimes).sort();
+  
+  const sortedTimes = Array.from(validityTimes).sort();
+  console.log("🕐 Temps de validité extraits:", sortedTimes);
+  return sortedTimes;
 }
 
-// filter it
-function filterPolygonsByValidityTime(
-  convectionData: ConvectionData,
-  selectedTime: string | null
-): ConvectionData {
+// filter it - INCLURE tous les polygones encore valides au temps sélectionné
+function filterPolygonsByValidityTime(convectionData: ConvectionData, selectedTime: string | null): ConvectionData {
   if (!selectedTime || !convectionData.data?.features) {
+    console.log("❌ Pas de temps sélectionné ou pas de features");
     return convectionData;
   }
 
-  const filteredFeatures = convectionData.data.features.filter(
-    (feature: any) => feature.properties?.validity_start_time === selectedTime
-  );
+  console.log("🎯 Filtrage pour le temps sélectionné (UTC):", selectedTime);
+  
+  // Conversion directe en timestamp UTC
+  const selectedDateUTC = new Date(selectedTime).getTime();
+  console.log("📅 Timestamp UTC sélectionné:", selectedDateUTC);
+  
+  let includedCount = 0;
+  let excludedCount = 0;
+  
+  const filteredFeatures = convectionData.data.features.filter((feature: any, index: number) => {
+    const startTime = feature.properties?.validity_start_time;
+    const endTime = feature.properties?.validity_end_time;
+    
+    console.log(`\n--- Polygone ${index + 1} ---`);
+    console.log("Start time (UTC):", startTime);
+    console.log("End time (UTC):", endTime);
+    
+    if (!startTime) {
+      console.log("❌ Pas de start_time");
+      excludedCount++;
+      return false;
+    }
+    
+    if (!endTime) {
+      // Comparaison directe des strings ISO
+      const isExactMatch = startTime === selectedTime;
+      console.log("⚠️ Pas d'end_time, match exact:", isExactMatch);
+      if (isExactMatch) includedCount++; else excludedCount++;
+      return isExactMatch;
+    }
+    
+    // 🔄 CONVERSION DIRECTE en timestamps UTC - pas d'objets Date intermédiaires
+    const startDateUTC = new Date(startTime).getTime();
+    const endDateUTC = new Date(endTime).getTime();
+    
+    const isAfterStart = selectedDateUTC >= startDateUTC;
+    const isBeforeEnd = selectedDateUTC < endDateUTC;
+    const isIncluded = isAfterStart && isBeforeEnd;
+    
+    console.log("selectedDateUTC >= startDateUTC:", isAfterStart);
+    console.log("selectedDateUTC < endDateUTC:", isBeforeEnd);
+    console.log("INCLUS:", isIncluded);
+    
+    if (isIncluded) includedCount++; else excludedCount++;
+    return isIncluded;
+  });
+
+  console.log(`\n🎯 RÉSULTAT FINAL: ${includedCount} inclus, ${excludedCount} exclus`);
 
   return {
     ...convectionData,
@@ -192,6 +237,7 @@ function filterPolygonsByValidityTime(
     },
   };
 }
+
 
 // final usage of all request
 export function useConvectionMeteoFrance() {
@@ -351,15 +397,15 @@ export function useConvectionMeteoFrance() {
     selectedValidityTime: string | null
   ) => {
     try {
-      // Gérer le cas où selectedAnalysisTime peut être undefined
+
       const analysisTimeToUse = selectedAnalysisTime || convectionData.analysisTime || 'Unknown';
       const formattedAnalysisTime = formatDateForDisplay(analysisTimeToUse);
       const formattedValidityTime = selectedValidityTime
         ? formatDateForDisplay(selectedValidityTime)
         : 'Non spécifié';
 
-      // Créer le nom du dossier avec les valeurs sélectionnées par l'utilisateur
-      const folderName = `Conv Mfrance analysT: ${formattedAnalysisTime}\nstart: ${formattedValidityTime}`;
+
+      const folderName = `C Mfrance Time:${formattedAnalysisTime}start:${formattedValidityTime}`;
 
       // Créer un nouveau dossier à chaque fois
       const folderId = newFeatureId();
@@ -388,7 +434,7 @@ export function useConvectionMeteoFrance() {
             ...feature,
             properties: {
               ...feature.properties,
-              source: "meteofrance", // 🔥 CORRIGÉ : meteofrance au lieu de meandair
+              source: "meteofrance", 
               analysisTime: analysisTimeToUse,
               selectedValidityTime: selectedValidityTime,
               retrievedAt: convectionData.timestamp,
@@ -421,18 +467,16 @@ export function useConvectionMeteoFrance() {
     }
   }, [transact]);
 
-  // 🔥 MODIFIÉ : Fonction pour changer le validity time SANS créer automatiquement le dossier
   const setSelectedValidityTime = useCallback((validityTime: string | null) => {
     setState((prev) => ({
       ...prev,
       selectedValidityTime: validityTime,
     }));
     
-    // 🔥 SUPPRIMÉ : Plus de création automatique de dossier ici
     console.log(`Temps de validité sélectionné: ${validityTime}`);
   }, []);
 
-  // Charger automatiquement les temps d'analyse disponibles au montage
+  
   useEffect(() => {
     fetchAvailableAnalysisTimes();
   }, [fetchAvailableAnalysisTimes]);

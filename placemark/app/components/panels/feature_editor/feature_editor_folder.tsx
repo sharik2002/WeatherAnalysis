@@ -484,7 +484,7 @@ export function FeatureEditorFolderInner() {
         <div className="px-2 py-2">
           <ConvectionStatusMeteoFrance />
         </div>
-      </div>
+      </div> 
 
       {/* Bloc 2: Dossiers avec scroll */}
       <SortableContext items={tree} strategy={verticalListSortingStrategy}>

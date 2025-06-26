@@ -32,10 +32,11 @@ function formatDateForDisplay(dateString: string): string {
     const date = new Date(dateString);
     return date.toLocaleString('fr-FR', {
       year: 'numeric',
-      month: '2-digit',
+      month: '2-digit', 
       day: '2-digit',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: 'UTC' // 🎯 AJOUTÉ : Force UTC
     });
   } catch (error) {
     console.error('Erreur de formatage de date:', error);
@@ -131,7 +132,6 @@ async function getMeandairConvectionData(selectedAnalysisTime?: string): Promise
     }
   }
 
-  // Récupérer les données de convection
   const meandairData = await apiRequest(`/v1/convections/?source=meandair&format=geojson&analysis_time=${analysisTime}`);
 
   if (meandairData) {
@@ -150,33 +150,41 @@ async function getMeandairConvectionData(selectedAnalysisTime?: string): Promise
     };
   }
 }
-
-// extract validity time
 function extractValidityTimes(convectionData: ConvectionData): string[] {
   if (!convectionData.data?.features) return [];
-
+  
   const validityTimes = new Set<string>();
   convectionData.data.features.forEach((feature: any) => {
     if (feature.properties?.validity_start_time) {
-      validityTimes.add(feature.properties.validity_start_time);
+      validityTimes.add(feature.properties.validity_start_time); 
     }
   });
-
+  
   return Array.from(validityTimes).sort();
 }
 
-// filter it
-function filterPolygonsByValidityTime(
-  convectionData: ConvectionData,
-  selectedTime: string | null
-): ConvectionData {
+function filterPolygonsByValidityTime(convectionData: ConvectionData, selectedTime: string | null): ConvectionData {
   if (!selectedTime || !convectionData.data?.features) {
     return convectionData;
   }
 
-  const filteredFeatures = convectionData.data.features.filter(
-    (feature: any) => feature.properties?.validity_start_time === selectedTime
-  );
+  const selectedDate = new Date(selectedTime);
+  
+  const filteredFeatures = convectionData.data.features.filter((feature: any) => {
+    const startTime = feature.properties?.validity_start_time;
+    const endTime = feature.properties?.validity_end_time;
+    
+    if (!startTime) return false;
+    
+    const startDate = new Date(startTime);
+    if (!endTime) {
+      return startTime === selectedTime;
+    }
+    
+    const endDate = new Date(endTime);
+    console.log("groupe:",selectedDate >= startDate && selectedDate < endDate)
+    return selectedDate >= startDate && selectedDate < endDate;
+  });
 
   return {
     ...convectionData,
@@ -187,7 +195,6 @@ function filterPolygonsByValidityTime(
   };
 }
 
-// final usage of all request
 export function useConvectionMeandair() {
   const [state, setState] = useState<ConvectionState>({
     loading: false,
@@ -205,12 +212,10 @@ export function useConvectionMeandair() {
   const rep = usePersistence();
   const transact = rep.useTransact();
 
-  // Fonction pour récupérer les temps d'analyse disponibles
   const fetchAvailableAnalysisTimes = useCallback(async () => {
     setState((prev) => ({ ...prev, loadingAnalysisTimes: true, error: null }));
 
     try {
-      // S'authentifier si nécessaire
       if (!AUTH_TOKEN) {
         const email = "sharik.abubucker@Skyconseil.fr";
         const password = "Sharik@Abu04";
@@ -242,12 +247,10 @@ export function useConvectionMeandair() {
     }
   }, []);
 
-  // 🔥 MODIFIÉ : Fonction pour récupérer les données SANS créer automatiquement le dossier
   const fetchConvectionData = useCallback(async (selectedAnalysisTime?: string) => {
     setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
-      // S'authentifier si nécessaire
       if (!AUTH_TOKEN) {
         const email = "sharik.abubucker@Skyconseil.fr";
         const password = "Sharik@Abu04";
@@ -345,7 +348,7 @@ export function useConvectionMeandair() {
     selectedValidityTime: string | null
   ) => {
     try {
-      // Gérer le cas où selectedAnalysisTime peut être undefined
+
       const analysisTimeToUse = selectedAnalysisTime || convectionData.analysisTime || 'Unknown';
       const formattedAnalysisTime = formatDateForDisplay(analysisTimeToUse);
       const formattedValidityTime = selectedValidityTime
@@ -353,7 +356,7 @@ export function useConvectionMeandair() {
         : 'Non spécifié';
 
       // Créer le nom du dossier avec les valeurs sélectionnées par l'utilisateur
-      const folderName = `Conv Meandair analysT: ${formattedAnalysisTime}\nstart: ${formattedValidityTime}`;
+      const folderName = `C Meandair Time:${formattedAnalysisTime} start:${formattedValidityTime}`;
 
       // Créer un nouveau dossier à chaque fois
       const folderId = newFeatureId();
@@ -436,7 +439,7 @@ export function useConvectionMeandair() {
     fetchConvectionData,
     fetchAvailableAnalysisTimes,
     setSelectedValidityTime,
-    createConvectionFolder, // 🆕 AJOUTÉ : Nouvelle fonction pour créer le dossier
+    createConvectionFolder, 
     refetch: fetchConvectionData,
   };
 }
