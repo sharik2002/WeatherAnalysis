@@ -14,11 +14,13 @@ export function ConvectionStatusMeteoFrance() {
     availableValidityTimes,
     selectedValidityTime,
     setSelectedValidityTime,
-    createConvectionFolder, // 🆕 AJOUTÉ : Nouvelle fonction
+    createConvectionFolder,
     loadingValidityTimes
   } = useConvectionMeteoFrance();
 
   const [selectedAnalysisTime, setSelectedAnalysisTime] = useState<string>('');
+  // 🆕 AJOUTÉ : État pour savoir si un dossier a été créé
+  const [folderCreated, setFolderCreated] = useState<boolean>(false);
 
   const formatTime = (isoString: string | null) => {
     if (!isoString) return 'Jamais';
@@ -30,18 +32,27 @@ export function ConvectionStatusMeteoFrance() {
     });
   };
 
-  // 🔥 MODIFIÉ : Récupérer les temps de validité SANS créer de dossier
+  // 🔥 MODIFIÉ : Récupérer les temps de validité ET réactiver le filtre
   const handleFetchValidityTimes = () => {
     if (selectedAnalysisTime) {
-      fetchConvectionData(selectedAnalysisTime); // Plus de paramètre shouldDisplay
+      fetchConvectionData(selectedAnalysisTime);
     } else {
       fetchConvectionData(undefined);
     }
+    // 🆕 AJOUTÉ : Réactiver le filtre après récupération des données
+    setFolderCreated(false);
   };
 
-  // 🆕 NOUVEAU : Créer le dossier avec la nouvelle fonction dédiée
-  const handleCreateFolder = () => {
-    createConvectionFolder(); // Utilise la nouvelle fonction
+  // 🔥 MODIFIÉ : Créer le dossier ET désactiver le filtre
+  const handleCreateFolder = async () => {
+    try {
+      await createConvectionFolder();
+      // 🆕 AJOUTÉ : Désactiver le filtre après création du dossier
+      setFolderCreated(true);
+    } catch (error) {
+      console.error('Erreur lors de la création du dossier:', error);
+      // En cas d'erreur, ne pas désactiver le filtre
+    }
   };
 
   return (
@@ -102,7 +113,7 @@ export function ConvectionStatusMeteoFrance() {
         </button>
       </div>
 
-      {/* Filtre temps de validité - toujours visible */}
+      {/* 🔥 MODIFIÉ : Filtre temps de validité - désactivé après création du dossier */}
       <div className="mb-3 p-2 bg-green-50 rounded border">
         <label className="block text-xs font-medium text-gray-700 mb-1">
           Temps de validité (filtrage):
@@ -110,9 +121,9 @@ export function ConvectionStatusMeteoFrance() {
         <select
           value={selectedValidityTime || ''}
           onChange={(e) => setSelectedValidityTime(e.target.value || null)}
-          disabled={availableValidityTimes.length === 0}
+          disabled={availableValidityTimes.length === 0 || folderCreated} // 🆕 AJOUTÉ : folderCreated
           className={`w-full text-xs border border-gray-300 rounded px-2 py-1 bg-white ${
-            availableValidityTimes.length === 0
+            availableValidityTimes.length === 0 || folderCreated // 🆕 AJOUTÉ : folderCreated
               ? 'text-gray-400 cursor-not-allowed'
               : 'text-black'
           }`}
@@ -120,6 +131,8 @@ export function ConvectionStatusMeteoFrance() {
           <option value="">
             {availableValidityTimes.length === 0
               ? "Aucun temps disponible - Récupérer d'abord les temps"
+              : folderCreated // 🆕 AJOUTÉ : Message spécial après création
+              ? "Dossier créé - Récupérer de nouvelles données pour filtrer"
               : "Tous les polygones"}
           </option>
           {availableValidityTimes.map((time) => (
@@ -130,7 +143,7 @@ export function ConvectionStatusMeteoFrance() {
         </select>
       </div>
 
-      {/* 🔥 MODIFIÉ : Bouton créer le dossier avec nouvelle logique */}
+      {/* Bouton créer le dossier */}
       <div className="mb-3">
         <button
           onClick={handleCreateFolder}
@@ -184,10 +197,18 @@ export function ConvectionStatusMeteoFrance() {
           </div>
         )}
 
-        {selectedValidityTime && (
+        {selectedValidityTime && !folderCreated && ( // 🔥 MODIFIÉ : Masquer si dossier créé
           <div className="flex justify-between">
             <span>Filtre actif:</span>
             <span className="font-medium text-green-600">{formatTime(selectedValidityTime)}</span>
+          </div>
+        )}
+
+        {/* 🆕 AJOUTÉ : Indicateur de dossier créé */}
+        {folderCreated && (
+          <div className="flex justify-between">
+            <span>Dossier:</span>
+            <span className="font-medium text-green-600">✅ Créé</span>
           </div>
         )}
 
@@ -196,7 +217,7 @@ export function ConvectionStatusMeteoFrance() {
             <span>Cellules:</span>
             <span className="font-medium text-blue-600">
               {data.data.features.length}
-              {selectedValidityTime && ` (filtrées)`}
+              {selectedValidityTime && !folderCreated && ` (filtrées)`} {/* 🔥 MODIFIÉ */}
             </span>
           </div>
         )}
