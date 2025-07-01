@@ -476,7 +476,7 @@ export function FeatureEditorFolderInner() {
       <FeatureEditorFolderHeader featureMap={featureMap} />
       
       {/* Bloc 1: Statuts météo avec scroll */}
-      <div className="flex-shrink-0" style={{height: "600px"}} className="overflow-y-auto placemark-scrollbar border-b border-gray-200 dark:border-gray-900">
+      <div className="flex-shrink-0" style={{height: "500px"}} className="overflow-y-auto placemark-scrollbar border-b border-gray-200 dark:border-gray-900">
 
         <div className="px-2 py-2 border-b border-gray-200 dark:border-gray-900">
           <ConvectionStatusMeandair />

@@ -64,7 +64,7 @@ async function login(email: string, password: string): Promise<boolean> {
 
     if (response.ok) {
       const authData = await response.json();
-      AUTH_TOKEN = authData.Authorization;
+      AUTH_TOKEN = `Bearer ${authData.Authorization}`;
       REFRESH_TOKEN = authData.RefreshToken;
       console.log("Authentification réussie pour les convections Meandair");
       return true;
@@ -106,47 +106,53 @@ async function apiRequest(endpoint: string, method: string = "GET"): Promise<any
 }
 
 async function getAvailableAnalysisTimes(): Promise<string[]> {
-  console.log("Récupération des temps d'analyse disponibles...");
-  const meandairTimes = await apiRequest("/v1/convections/analysis_time?source=meandair");
-  console.log("Temps Meandair reçus:", meandairTimes);
+  console.log("Récupération des temps d'analyse disponibles (icing WSI)...");
+  const icingTimes = await apiRequest("v1/icing/?num_fc=8");
+  console.log("Temps WSI icing reçus:", icingTimes);
 
-  if (meandairTimes && typeof meandairTimes === "object" && "analysis_times" in meandairTimes) {
-    return meandairTimes.analysis_times || [];
+  if (icingTimes && typeof icingTimes === "object") {
+    return Object.keys(icingTimes);
   }
   return [];
 }
 
 async function getMeandairConvectionData(selectedAnalysisTime?: string): Promise<ConvectionData> {
-  console.log("Récupération des données de convection Meandair...");
+  console.log("Récupération des données icing WSI...");
   let analysisTime = selectedAnalysisTime;
 
-  // Si aucun temps n'est spécifié, récupérer les temps disponibles
   if (!analysisTime) {
     const availableTimes = await getAvailableAnalysisTimes();
     if (availableTimes.length > 0) {
       analysisTime = availableTimes[0];
     } else {
-      // Utiliser le temps actuel si aucun temps d'analyse n'est disponible
       analysisTime = new Date().toISOString().slice(0, 13) + ":00:00Z";
-      console.log(`Utilisation du temps actuel pour Meandair: ${analysisTime}`);
+      console.log(`Utilisation du temps actuel pour WSI: ${analysisTime}`);
     }
   }
 
-  const meandairData = await apiRequest(`/v1/convections/?source=meandair&format=geojson&analysis_time=${analysisTime}`);
+  const fileIndex = await apiRequest(`v1/icing/${analysisTime}`);
+  const nowcastUrl = fileIndex?.[analysisTime];
 
-  if (meandairData) {
-    console.log("Données de convection Meandair récupérées avec succès");
+  if (!nowcastUrl) {
+    return {
+      success: false,
+      error: "Aucune donnée nowcast disponible pour ce analysis_time",
+    };
+  }
+
+  const icingData = await apiRequest(nowcastUrl.replace("https://api.guidor.fr/", ""));
+
+  if (icingData) {
     return {
       success: true,
-      data: meandairData,
+      data: icingData,
       analysisTime,
       timestamp: new Date().toISOString(),
     };
   } else {
-    console.error("Erreur lors de la récupération des données de convection Meandair");
     return {
       success: false,
-      error: "Échec de la récupération des données de convection Meandair",
+      error: "Échec de la récupération des données icing WSI",
     };
   }
 }
@@ -276,7 +282,7 @@ export function useConvectionMeandair() {
         setState((prev) => ({
           ...prev,
           loading: false,
-          data: convectionData,
+          data: convectionData,co
           error: null,
           lastUpdate: new Date().toISOString(),
           availableValidityTimes: validityTimes,
