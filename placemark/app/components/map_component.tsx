@@ -186,30 +186,39 @@ export const MapComponent = memo(function MapComponent({
     // eslint-disable-next-line
   }, [mapRef, mapDivRef, setMap]);
 
-  useEffect(
-    function mapSetDataMethods() {
-      if (!map?.map) {
-        return;
+useEffect(
+  function mapSetDataMethods() {
+    if (!map?.map) return;
+
+    try {
+      if (typeof map.setData === 'function') {
+        map.setData({
+          data,
+          ephemeralState,
+        });
+      } else {
+        console.warn("map.setData non disponible");
       }
 
-      // These are all, hopefully, things that we can call
-      // really often without performance issues because these inputs
-      // stay the same and the functions skip if they're given the same input.
-      // Ordering here, though, is tricky.
-      map.setData({
-        data,
-        ephemeralState,
-      });
-      map
-        .setStyle({
-          layerConfigs,
-          symbolization: symbolization || SYMBOLIZATION_NONE,
-          previewProperty: label,
-        })
-        .catch((e) => Sentry.captureException(e));
-    },
-    [map, folderMap, symbolization, data, layerConfigs, ephemeralState, label]
-  );
+      if (typeof map.setStyle === 'function') {
+        map
+          .setStyle({
+            layerConfigs,
+            symbolization: symbolization || SYMBOLIZATION_NONE,
+            previewProperty: label,
+          })
+          .catch((e) => Sentry.captureException(e));
+      } else {
+        console.warn("map.setStyle non disponible");
+      }
+    } catch (err) {
+      console.error("Erreur dans mapSetDataMethods", err);
+      Sentry.captureException(err);
+    }
+  },
+  [map, folderMap, symbolization, data, layerConfigs, ephemeralState, label]
+);
+
 
   const throttledMovePointer = useMemo(() => {
     function fastMovePointer(point: mapboxgl.Point) {
